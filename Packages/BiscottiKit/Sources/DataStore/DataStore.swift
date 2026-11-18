@@ -24,6 +24,8 @@ public actor DataStore {
     private let container: ModelContainer
     let context: ModelContext
     let searchIndex: SearchIndex
+    let preparationNotesURL: URL?
+    var inMemoryPreparationNotes: [String: String] = [:]
     /// Last-known SwiftData history token for incremental FTS5 index
     /// sync. `nil` on launch; the first search triggers a full reconcile.
     var lastSyncToken: DefaultHistoryToken?
@@ -75,6 +77,10 @@ public actor DataStore {
             .inMemory
         }
         searchIndex = Self.openSearchIndex(indexStorage)
+        preparationNotesURL = switch storage {
+        case let .onDisk(url): url.appending(path: "PreparationNotes.json")
+        case .inMemory: nil
+        }
     }
 
     /// Opens the search index, recovering from a damaged index file.

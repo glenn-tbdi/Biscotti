@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import Calendar
+import DataStore
 import DesignSystem
 import Formatting
 import Foundation
@@ -15,7 +16,7 @@ public enum EventAction: Equatable, Sendable {
     case record
 }
 
-/// View model for the read-only preview of an upcoming calendar event.
+/// View model for an upcoming calendar event and its local preparation notes.
 ///
 /// Exposes event data, time-based action buttons, and all available
 /// event details, keeping `EventPreviewView` thin per the view-model
@@ -24,6 +25,10 @@ public enum EventAction: Equatable, Sendable {
 public final class EventPreviewViewModel {
     private let core: AppCore
     private let eventKey: String
+    private var savedPreparationNotes: String?
+    public var preparationNotes = ""
+    public private(set) var preparationNotesError: String?
+    public private(set) var isSavingPreparationNotes = false
 
     /// Injectable "now" for deterministic tests.
     private let currentDate: () -> Date
@@ -68,7 +73,7 @@ public final class EventPreviewViewModel {
 
     /// Whether the Record button should be disabled (recording already active).
     public var recordDisabled: Bool {
-        core.recording.state.isRecording
+        core.recording.state.isRecording || isSavingPreparationNotes
     }
 
     // MARK: - Action & Prominence
@@ -190,10 +195,51 @@ public final class EventPreviewViewModel {
         return parts.joined(separator: " \u{00B7} ")
     }
 
+    // MARK: - Preparation notes
+
+    public var preparationNotesLoaded: Bool {
+        savedPreparationNotes != nil
+    }
+
+    public var hasPreparationNotesEdits: Bool {
+        guard let savedPreparationNotes else { return false }
+        return savedPreparationNotes != preparationNotes
+    }
+
+    public func loadPreparationNotes() async {
+        guard !preparationNotesLoaded else { return }
+        preparationNotesError = nil
+        do {
+            let notes = try await core.store.preparationNotes(for: eventKey)
+            guard !preparationNotesLoaded else { return }
+            savedPreparationNotes = notes
+            preparationNotes = notes
+        } catch {
+            preparationNotesError = "Couldn’t load preparation notes."
+        }
+    }
+
+    public func savePreparationNotes() async {
+        guard hasPreparationNotesEdits, !isSavingPreparationNotes else { return }
+        isSavingPreparationNotes = true
+        preparationNotesError = nil
+        defer { isSavingPreparationNotes = false }
+
+        let text = preparationNotes
+        do {
+            try await core.store.setPreparationNotes(text, for: eventKey)
+            savedPreparationNotes = text
+        } catch {
+            preparationNotesError = "Couldn’t save preparation notes."
+        }
+    }
+
     // MARK: - Actions
 
     /// Starts recording pre-associated with this event (C4 explicit key).
     public func startRecording() async {
+        await savePreparationNotes()
+        guard !hasPreparationNotesEdits, !isSavingPreparationNotes else { return }
         await core.startRecording(eventKey: eventKey)
     }
 
@@ -205,6 +251,8 @@ public final class EventPreviewViewModel {
 
     /// Opens the conference URL AND starts recording with the event key.
     public func joinAndRecord() async {
+        await savePreparationNotes()
+        guard !hasPreparationNotesEdits, !isSavingPreparationNotes else { return }
         if let url = event?.conferenceURL {
             urlOpener(url)
         }

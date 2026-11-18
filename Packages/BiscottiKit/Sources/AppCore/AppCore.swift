@@ -533,15 +533,7 @@ public final class AppCore {
         logger.info("startBackgroundServices: calendar startObserving")
         calendar.startObserving()
         logger.info("startBackgroundServices: calendar refreshUpcoming")
-        let now = Date()
-        await calendar.refreshUpcoming(
-            window: DateInterval(
-                start: now,
-                end: now.addingTimeInterval(
-                    CalendarService.upcomingWindowSeconds
-                )
-            )
-        )
+        await calendar.refreshUpcoming()
         upcoming = calendar.upcoming
         logger.info("startBackgroundServices: calendar done")
 
@@ -828,7 +820,7 @@ public extension AppCore {
         searchFocusToken &+= 1
     }
 
-    /// Routes to the read-only preview for an upcoming calendar event.
+    /// Routes to the preview for an upcoming calendar event.
     func selectEvent(_ key: String) {
         route = .event(key)
     }
@@ -1793,6 +1785,15 @@ extension AppCore {
         _ event: CalendarEvent,
         with meetingID: UUID
     ) async {
+        do {
+            let notes = try await store.preparationNotes(for: event.id)
+            if !notes.isEmpty {
+                try await store.setNotes(notes, for: meetingID)
+            }
+        } catch {
+            logger.error("Could not copy preparation notes to recording: \(error)")
+        }
+
         guard let input = await calendar.snapshot(forKey: event.id)
         else { return }
 

@@ -125,7 +125,7 @@ private func makeReadyVM(
     )
     await fix.calendarService.refreshUpcoming(window: window)
 
-    let eventKey = try #require(fix.calendarService.upcoming.first?.id)
+    let eventKey = try #require(fix.calendarService.timedUpcoming.first?.id)
     let urlTracker = URLTracker()
     let clipTracker = ClipboardTracker()
 
@@ -404,6 +404,36 @@ struct EventPreviewActionSideEffectTests {
         await ready.viewModel.startRecording()
 
         #expect(ready.fixture.core.recording.state.isRecording)
+    }
+
+    @Test("Solo event preparation notes survive reopening and carry into the recording")
+    @MainActor
+    func soloEventPreparationNotes() async throws {
+        let ready = try await makeReadyVM(
+            eventStart: refDate.addingTimeInterval(1800),
+            conferenceURL: nil,
+            organizer: nil,
+            attendees: []
+        )
+        defer { ready.fixture.cleanup() }
+
+        let eventKey = try #require(ready.viewModel.event?.id)
+        await ready.viewModel.loadPreparationNotes()
+        ready.viewModel.preparationNotes = "Ask about the launch date."
+        await ready.viewModel.savePreparationNotes()
+
+        let reopened = EventPreviewViewModel(core: ready.fixture.core, eventKey: eventKey)
+        await reopened.loadPreparationNotes()
+        #expect(reopened.preparationNotes == "Ask about the launch date.")
+
+        await reopened.startRecording()
+
+        let meetingID = try #require(ready.fixture.core.recording.state.meetingID)
+        try await ready.fixture.store.read { store in
+            let meeting = try #require(store.meeting(id: meetingID))
+            #expect(meeting.notes == "Ask about the launch date.")
+            #expect(meeting.title == "Team Standup")
+        }
     }
 
     @Test("Open in Calendar opens ical deep-link URL with event identifier")

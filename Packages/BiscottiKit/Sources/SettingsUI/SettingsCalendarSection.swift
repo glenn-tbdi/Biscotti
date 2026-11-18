@@ -8,6 +8,10 @@ import SwiftUI
 extension SettingsView {
     var calendarSection: some View {
         Section(Self.sectionTitles[7]) {
+            Text("Biscotti reads the calendars available in this Mac’s Calendar app. Turn on the calendars you want Biscotti to use.")
+                .font(Tokens.metadataFont)
+                .foregroundStyle(Tokens.secondaryText)
+
             if viewModel.calendarState == .authorized {
                 if viewModel.calendarGroups.isEmpty {
                     settingsCalendarEmptyState

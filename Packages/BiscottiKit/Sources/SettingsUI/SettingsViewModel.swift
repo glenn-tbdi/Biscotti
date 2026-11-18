@@ -350,15 +350,7 @@ public final class SettingsViewModel {
                 settings.enabledCalendarIDs = updated
             }
             // Refresh upcoming to reflect the change
-            let now = Date()
-            await core.calendar.refreshUpcoming(
-                window: DateInterval(
-                    start: now,
-                    end: now.addingTimeInterval(
-                        CalendarService.upcomingWindowSeconds
-                    )
-                )
-            )
+            await core.calendar.refreshUpcoming()
         } catch {
             // Revert UI on failure
             enabledCalendarIDs = nil

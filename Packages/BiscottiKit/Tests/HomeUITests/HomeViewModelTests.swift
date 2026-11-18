@@ -12,23 +12,23 @@ import Testing
 
 @Suite("HomeViewModel -- state")
 struct HomeViewModelStateTests {
-    @Test("upcomingPreview returns first 3 events from core.displayedUpcoming")
+    @Test("Upcoming shows the next five timed events, including solo events on future days")
     @MainActor
     func homeShowsUpcomingPreview() async throws {
-        let now = Date()
+        let calendar = Foundation.Calendar.current
+        let now = calendar.startOfDay(for: Date()).addingTimeInterval(12 * 3600)
         let dtos = (0 ..< 8).map { idx -> EKEventDTO in
-            let start: TimeInterval = Double(idx + 1) * 600
-            let end: TimeInterval = start + 3600
+            let start = calendar.date(byAdding: .day, value: idx + 1, to: now) ?? now
             return EKEventDTO(
                 eventIdentifier: "ev-\(idx)",
                 calendarItemIdentifier: "ci-\(idx)",
                 calendarItemExternalIdentifier: "ext-\(idx)",
-                occurrenceDate: now,
+                occurrenceDate: start,
                 title: "Event \(idx)",
-                startDate: now.addingTimeInterval(start),
-                endDate: now.addingTimeInterval(end),
+                startDate: start,
+                endDate: start.addingTimeInterval(3600),
                 isAllDay: false,
-                location: "https://zoom.us/j/\(idx)",
+                location: nil,
                 url: nil,
                 timeZone: nil,
                 notes: nil,
@@ -39,7 +39,7 @@ struct HomeViewModelStateTests {
                 calendarColorHex: "#0066CC",
                 calendarSourceTitle: "iCloud",
                 birthdayContactIdentifier: nil,
-                attendeeCount: 3,
+                attendeeCount: 0,
                 attendees: [],
                 organizer: nil
             )
@@ -53,11 +53,14 @@ struct HomeViewModelStateTests {
 
         try await fix.store.updateSettings { $0.onboardingComplete = true }
         await fix.core.onLaunch()
+        fix.core.setMinuteTick(now)
 
         let viewModel = HomeViewModel(core: fix.core)
-        #expect(viewModel.upcomingPreview.count == 3)
-        #expect(viewModel.upcomingPreview[0].title == "Event 0")
-        #expect(viewModel.upcomingPreview[2].title == "Event 2")
+        #expect(viewModel.upcomingPreview.map(\.title) == (0 ..< 5).map { "Event \($0)" })
+        let first = try #require(viewModel.upcomingPreview.first)
+        #expect(viewModel.eventDayText(for: first) == "Tomorrow")
+        #expect(fix.calendarService.event(forKey: first.id)?.title == first.title)
+        #expect(fix.core.displayedUpcoming.isEmpty)
     }
 
     @Test("showConnectCalendar is true when calendar access not authorized")

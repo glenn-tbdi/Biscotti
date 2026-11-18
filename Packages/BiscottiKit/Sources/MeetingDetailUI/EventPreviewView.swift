@@ -3,7 +3,7 @@ import Calendar
 import DesignSystem
 import SwiftUI
 
-/// Read-only preview of an upcoming calendar event with time-gated
+/// Preview of an upcoming calendar event with time-gated
 /// action prominence: buttons are visually prominent only within
 /// 5 min before start through 5 min after end.
 ///
@@ -12,7 +12,7 @@ import SwiftUI
 /// meta line with SourcePill, dedicated event details card with
 /// custom attendee section.
 public struct EventPreviewView: View {
-    private let viewModel: EventPreviewViewModel
+    @Bindable private var viewModel: EventPreviewViewModel
 
     /// Transient "Copied" feedback for the Copy Link button.
     @State private var didCopyLink = false
@@ -27,6 +27,7 @@ public struct EventPreviewView: View {
     public var body: some View {
         if let event = viewModel.event {
             eventContent(event)
+                .task(id: event.id) { await viewModel.loadPreparationNotes() }
                 .onDisappear {
                     copyResetTask?.cancel()
                     copyResetTask = nil
@@ -51,6 +52,9 @@ public struct EventPreviewView: View {
                 actionBar
                     .padding(.top, Tokens.spacingMD)
 
+                preparationNotesSection
+                    .padding(.top, Tokens.spacingMD)
+
                 eventDetailsCard(event)
                     .padding(.top, Tokens.spacingMD)
 
@@ -67,6 +71,41 @@ public struct EventPreviewView: View {
             maxHeight: .infinity,
             alignment: .topLeading
         )
+    }
+}
+
+// MARK: - Preparation notes
+
+private extension EventPreviewView {
+    var preparationNotesSection: some View {
+        VStack(alignment: .leading, spacing: Tokens.spacingSM) {
+            Text("Preparation notes")
+                .font(.headline)
+
+            if viewModel.preparationNotesLoaded {
+                TextEditor(text: $viewModel.preparationNotes)
+                    .font(.body)
+                    .frame(minHeight: 100)
+                    .accessibilityLabel("Preparation notes")
+                    .disabled(viewModel.isSavingPreparationNotes)
+
+                Button("Save Notes") {
+                    Task { await viewModel.savePreparationNotes() }
+                }
+                .disabled(!viewModel.hasPreparationNotesEdits || viewModel.isSavingPreparationNotes)
+            }
+
+            if let error = viewModel.preparationNotesError {
+                Text(error)
+                    .font(Tokens.metadataFont)
+                    .foregroundStyle(.inkSecondary)
+                if !viewModel.preparationNotesLoaded {
+                    Button("Retry") {
+                        Task { await viewModel.loadPreparationNotes() }
+                    }
+                }
+            }
+        }
     }
 }
 

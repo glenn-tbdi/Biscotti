@@ -25,6 +25,16 @@ struct RecordingNotesView: View {
     @Binding var editingNoteText: String
 
     var body: some View {
+        if let preparation = viewModel.detail?.notes, !preparation.isEmpty {
+            VStack(alignment: .leading, spacing: Tokens.spacingXS) {
+                Text("Preparation notes")
+                    .font(.headline)
+                Text(preparation)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
         noteComposer
 
         if !viewModel.notes.isEmpty {

@@ -70,7 +70,7 @@ public final class HomeViewModel {
     /// Returns just the relative portion (e.g. "in 5h", "in 2 days");
     /// the View composes the "Next " prefix for the stat chip.
     public var nextInText: String? {
-        guard let first = core.displayedUpcoming.first else { return nil }
+        guard let first = upcomingPreview.first else { return nil }
         return TimeFormatting.coarseRelativeTimeText(
             first.start, relativeTo: core.minuteTick
         )
@@ -104,10 +104,10 @@ public final class HomeViewModel {
 
     // MARK: - State (derived from core)
 
-    /// The upcoming meeting-like events to show as a preview list (max 3).
-    /// Uses `displayedUpcoming` which filters out ended events.
+    /// The next five timed events from enabled calendars, excluding ended events.
     public var upcomingPreview: [CalendarEvent] {
-        Array(core.displayedUpcoming.prefix(3))
+        let tick = core.minuteTick
+        return Array(core.calendar.timedUpcoming.lazy.filter { $0.end > tick }.prefix(5))
     }
 
     /// The most recent meetings (max 3, newest-first).
@@ -266,6 +266,18 @@ public final class HomeViewModel {
         TimeFormatting.coarseRelativeTimeText(
             event.start, relativeTo: core.minuteTick
         )
+    }
+
+    func eventDayText(for event: CalendarEvent) -> String? {
+        let calendar = Foundation.Calendar.current
+        let today = core.minuteTick
+        guard !calendar.isDate(event.start, inSameDayAs: today) else { return nil }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+           calendar.isDate(event.start, inSameDayAs: tomorrow)
+        {
+            return "Tomorrow"
+        }
+        return event.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
     // MARK: - Private

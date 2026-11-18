@@ -276,6 +276,12 @@ private struct HomeUpcomingSection: View {
                             .font(.monoMetaMedium)
                             .foregroundStyle(.sage)
 
+                        if let day = viewModel.eventDayText(for: event) {
+                            Text(day)
+                                .font(.monoMeta)
+                                .foregroundStyle(.inkSecondary)
+                        }
+
                         Text(HomeSharedViews.formattedTime(event.start))
                             .font(.monoMeta)
                             .foregroundStyle(.inkSecondary)

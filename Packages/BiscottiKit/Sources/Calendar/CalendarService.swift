@@ -18,6 +18,7 @@ public final class CalendarService {
 
     public private(set) var auth: CalendarAuthStatus
     public private(set) var upcoming: [CalendarEvent] = []
+    public private(set) var timedUpcoming: [CalendarEvent] = []
 
     // MARK: - Dependencies
 
@@ -48,10 +49,9 @@ public final class CalendarService {
     /// without accessing MainActor-isolated storage.
     private let observationBox = ObservationBox()
 
-    /// The lookahead window for fetching upcoming events (7 days).
-    /// Used by AppCore.startBackgroundServices, CalendarService.handleStoreChanged,
-    /// and SettingsViewModel when refreshing after calendar selection changes.
+    /// The lookahead for meeting detection and notifications (7 days).
     public static let upcomingWindowSeconds: TimeInterval = 7 * 24 * 60 * 60
+    private static let homeLookaheadDays = 90
 
     // MARK: - Init
 
@@ -91,32 +91,46 @@ public final class CalendarService {
         }.value
     }
 
-    /// Re-fetch meeting-like events in the given window. Updates `upcoming`.
-    public func refreshUpcoming(window: DateInterval) async {
-        let dtos = await fetchDTOs(in: window)
+    /// Refresh the standard meeting window and the longer Home preview.
+    public func refreshUpcoming(now: Date = Date()) async {
+        let end = now.addingTimeInterval(Self.upcomingWindowSeconds)
+        let homeEnd = Foundation.Calendar.current.date(
+            byAdding: .day, value: Self.homeLookaheadDays, to: now
+        ) ?? end
+        await refreshUpcoming(
+            window: DateInterval(start: now, end: end),
+            homeEnd: homeEnd
+        )
+    }
+
+    /// Refresh the meeting list and timed events, optionally extending the Home lookahead.
+    public func refreshUpcoming(window: DateInterval, homeEnd: Date? = nil) async {
+        let fetchWindow = DateInterval(start: window.start, end: max(window.end, homeEnd ?? window.end))
+        let dtos = await fetchDTOs(in: fetchWindow)
 
         var events: [CalendarEvent] = []
         var dtoCache: [String: EKEventDTO] = [:]
 
         for dto in dtos {
+            guard !dto.isAllDay, dto.birthdayContactIdentifier == nil else { continue }
             let conference = conferenceResult(for: dto)
-            guard isMeetingLike(dto, conference: conference)
-            else { continue }
             let (key, event) = mapDTOToEvent(
-                dto, conference: conference, meetingLike: true
+                dto, conference: conference,
+                meetingLike: isMeetingLike(dto, conference: conference)
             )
             events.append(event)
             dtoCache[key] = dto
         }
 
         events.sort { $0.start < $1.start }
-        upcoming = events
         cachedDTOs = dtoCache
+        timedUpcoming = events
+        upcoming = events.filter { $0.isMeetingLike && $0.start < window.end }
     }
 
     /// Look up a cached CalendarEvent by its composite key string.
     public func event(forKey key: String) -> CalendarEvent? {
-        upcoming.first { $0.id == key }
+        timedUpcoming.first { $0.id == key }
     }
 
     /// Fetch calendar events near `date` (the recording start) for
@@ -336,12 +350,7 @@ public final class CalendarService {
 
 extension CalendarService {
     private func handleStoreChanged() async {
-        let now = Date()
-        let window = DateInterval(
-            start: now,
-            end: now.addingTimeInterval(Self.upcomingWindowSeconds)
-        )
-        await refreshUpcoming(window: window)
+        await refreshUpcoming()
     }
 }
 
