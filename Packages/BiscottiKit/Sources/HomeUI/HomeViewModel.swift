@@ -145,7 +145,8 @@ public final class HomeViewModel {
 
     /// Request calendar access (from the "Connect" empty state).
     public func requestCalendarAccess() async {
-        _ = await core.calendar.requestAccess()
+        guard await core.calendar.requestAccess() == .authorized else { return }
+        await core.calendar.refreshUpcoming()
     }
 
     /// Select an upcoming event to preview its detail.

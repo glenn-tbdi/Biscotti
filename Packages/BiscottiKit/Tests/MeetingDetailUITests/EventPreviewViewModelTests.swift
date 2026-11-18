@@ -417,6 +417,7 @@ struct EventPreviewActionSideEffectTests {
         )
         defer { ready.fixture.cleanup() }
 
+        ready.fixture.fakeEventStore.refreshResult = ready.fixture.fakeEventStore.eventDTOs.first
         let eventKey = try #require(ready.viewModel.event?.id)
         await ready.viewModel.loadPreparationNotes()
         ready.viewModel.preparationNotes = "Ask about the launch date."
