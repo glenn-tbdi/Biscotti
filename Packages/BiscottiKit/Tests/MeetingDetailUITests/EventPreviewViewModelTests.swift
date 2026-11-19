@@ -430,11 +430,10 @@ struct EventPreviewActionSideEffectTests {
         await reopened.startRecording()
 
         let meetingID = try #require(ready.fixture.core.recording.state.meetingID)
-        try await ready.fixture.store.read { store in
-            let meeting = try #require(store.meeting(id: meetingID))
-            #expect(meeting.notes == "Ask about the launch date.")
-            #expect(meeting.title == "Team Standup")
-        }
+        let detail = try await ready.fixture.store.meetingDetail(id: meetingID)
+        let meeting = try #require(detail)
+        #expect(meeting.notes == "Ask about the launch date.")
+        #expect(meeting.title == "Team Standup")
     }
 
     @Test("Open in Calendar opens ical deep-link URL with event identifier")
